@@ -1,46 +1,56 @@
 package sorokin.java.course.account;
 
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
 import org.springframework.stereotype.Component;
-import sorokin.java.course.account.Account;
+import org.springframework.stereotype.Service;
+import sorokin.java.course.config.TransactionHelper;
 import sorokin.java.course.user.User;
+import sorokin.java.course.user.UserService;
 
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-@Component
+@Service
 public class AccountService {
-
-    private int idCounter;
-    private final Map<Integer, Account> accountMap;
     private final AccountProperties accountProperties;
+    private final SessionFactory sessionFactory;
+    private final TransactionHelper transactionHelper;
 
-    public AccountService(AccountProperties accountProperties) {
-        this.idCounter = 0;
-        this.accountMap = new HashMap<>();
+    public AccountService(AccountProperties accountProperties, SessionFactory sessionFactory, TransactionHelper transactionHelper) {
+        this.sessionFactory = sessionFactory;
         this.accountProperties = accountProperties;
+        this.transactionHelper = transactionHelper;
     }
 
     public Account createAccount(User user) {
         if (user == null) {
             throw new IllegalArgumentException("user must not be null");
         }
-        idCounter++;
-        Account newAccount = new Account(idCounter, user.getId(), accountProperties.getDefaultAmount());
-        accountMap.put(idCounter, newAccount);
-        return newAccount;
+        return transactionHelper.executeTransaction(session -> {
+            Account account = new Account(user, accountProperties.getDefaultAmount());
+            session.persist(account);
+            return account;
+        });
     }
 
     public Optional<Account> findAccountById(Integer id) {
         validatePositiveId(id, "account id");
-        return Optional.ofNullable(accountMap.get(id));
+        try (Session session = sessionFactory.openSession()) {
+            Account account = session.find(Account.class, id);
+            return Optional.ofNullable(account);
+        }
     }
 
     public List<Account> getUserAccounts(Integer userId) {
-        return accountMap.values().stream()
-                .filter(it -> userId.equals(it.getUserId()))
-                .toList();
+        try (Session session = sessionFactory.openSession()) {
+            return session.createQuery("select a from Account a where a.user = :userId", Account.class)
+                    .setParameter("userId", userId)
+                    .list();
+        }
     }
 
     public void withdraw(Integer fromAccountId, Integer amount) {
@@ -48,14 +58,22 @@ public class AccountService {
         validatePositiveAmount(amount);
         Account account = findAccountById(fromAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("No such account: id=%s".formatted(fromAccountId)));
-
-        if (amount > account.getMoneyAmount()) {
-            throw new IllegalArgumentException(
-                    "insufficient funds on account id=%s, moneyAmount=%s, attempted withdraw=%s"
-                            .formatted(account.getId(), account.getMoneyAmount(), amount)
-            );
-        }
-        account.setMoneyAmount(account.getMoneyAmount() - amount);
+        transactionHelper.executeTransaction(session -> {
+            session.merge(account);
+            if (amount > account.getMoneyAmount()) {
+                throw new IllegalArgumentException(
+                        "insufficient funds on account id=%s, moneyAmount=%s, attempted withdraw=%s"
+                                .formatted(account.getId(), account.getMoneyAmount(), amount)
+                );
+            }
+            User user = session.find(User.class, account.getUser().getId());
+            account.setMoneyAmount(account.getMoneyAmount() - amount);
+            List<Account> accountList = user.getAccountList();
+            accountList = accountList.stream().filter(account1 -> account1.getId() != account.getId()).collect(Collectors.toList());
+            accountList.add(account);
+            user.setAccountList(accountList);
+            user.getAccountList().forEach(System.out::println);
+        });
     }
 
     public void deposit(Integer toAccountId, Integer amount) {
@@ -67,17 +85,15 @@ public class AccountService {
         account.setMoneyAmount(account.getMoneyAmount() + amount);
     }
 
-    public Account closeAccount(Integer accountId) {
+    public Optional<Account> closeAccount(Integer accountId) {
         validatePositiveId(accountId, "account id");
         Account accountToClose = findAccountById(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("No such account: id=%s".formatted(accountId)));
-        var userId = accountToClose.getUserId();
-        var userAccounts = getUserAccounts(userId);
+        int userAccountFind = accountToClose.getUser().getId();
+        var userAccounts = getUserAccounts(userAccountFind);
         if (userAccounts.size() == 1) {
             throw new IllegalStateException("Can't close the only one account");
         }
-        accountMap.remove(accountId);
-
         var accountToTransferMoney = userAccounts.stream()
                 .filter(it -> it.getId() != accountId)
                 .findFirst()
@@ -85,7 +101,10 @@ public class AccountService {
 
         var newAmount = accountToTransferMoney.getMoneyAmount() + accountToClose.getMoneyAmount();
         accountToTransferMoney.setMoneyAmount(newAmount);
-        return accountToClose;
+        return transactionHelper.executeTransaction(session1 -> {
+            session1.remove(accountToClose);
+            return Optional.of(accountToClose);
+        });
     }
 
     public void transfer(int fromAccountId, int toAccountId, int amount) {
@@ -106,12 +125,14 @@ public class AccountService {
                             .formatted(accountFrom.getId(), accountFrom.getMoneyAmount(), amount)
             );
         }
-        accountFrom.setMoneyAmount(accountFrom.getMoneyAmount() - amount);
+        transactionHelper.executeTransaction(session -> {
+            accountFrom.setMoneyAmount(accountFrom.getMoneyAmount() - amount);
 
-        int amountToTransfer = accountTo.getUserId() == accountFrom.getUserId()
-                ? amount
-                : (int) Math.round(amount * (1 - accountProperties.getTransferCommission()));
-        accountTo.setMoneyAmount(accountTo.getMoneyAmount() + amountToTransfer);
+            int amountToTransfer = accountTo.getUser().getId() == accountFrom.getUser().getId()
+                    ? amount
+                    : (int) Math.round(amount * (1 - accountProperties.getTransferCommission()));
+            accountTo.setMoneyAmount(accountTo.getMoneyAmount() + amountToTransfer);
+        });
     }
 
     private void validatePositiveId(Integer id, String fieldName) {
