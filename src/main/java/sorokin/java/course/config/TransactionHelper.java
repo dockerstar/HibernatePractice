@@ -46,6 +46,7 @@ public class TransactionHelper {
             return result;
         } catch (Exception e) {
             if (transaction!=null) {
+                e.printStackTrace();
                 transaction.rollback();
             }
             throw e;

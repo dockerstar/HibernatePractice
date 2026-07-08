@@ -46,10 +46,9 @@ public class AccountService {
     }
 
     public List<Account> getUserAccounts(Integer userId) {
-        try (Session session = sessionFactory.openSession()) {
-            return session.createQuery("select a from Account a where a.user = :userId", Account.class)
-                    .setParameter("userId", userId)
-                    .list();
+        try (Session session =sessionFactory.openSession()) {
+            User user = session.find(User.class, userId);
+            return user.getAccountList();
         }
     }
 
@@ -86,24 +85,27 @@ public class AccountService {
 
     public Optional<Account> closeAccount(Integer accountId) {
         validatePositiveId(accountId, "account id");
-        Account accountToClose = findAccountById(accountId)
-                .orElseThrow(() -> new IllegalArgumentException("No such account: id=%s".formatted(accountId)));
-        int userAccountFind = accountToClose.getUser().getId();
-        var userAccounts = getUserAccounts(userAccountFind);
-        if (userAccounts.size() == 1) {
-            throw new IllegalStateException("Can't close the only one account");
-        }
-        var accountToTransferMoney = userAccounts.stream()
-                .filter(it -> it.getId() != accountId)
-                .findFirst()
-                .orElseThrow();
+        return transactionHelper.executeTransaction(session -> {
+            Account accountToClose = session.find(Account.class, accountId);
+            if (accountToClose==null) {
+                throw new IllegalArgumentException("No such account: id=%s".formatted(accountId));
+            }
+            int userAccountFind = accountToClose.getUser().getId();
+            List<Account> userAccounts = getUserAccounts(userAccountFind);
+            if (userAccounts.size() == 1) {
+                throw new IllegalStateException("Can't close the only one account");
+            }
+            var accountToTransferMoney = userAccounts.stream()
+                    .filter(it -> it.getId() != accountId)
+                    .findFirst()
+                    .orElseThrow();
 
-        var newAmount = accountToTransferMoney.getMoneyAmount() + accountToClose.getMoneyAmount();
-        accountToTransferMoney.setMoneyAmount(newAmount);
-        return transactionHelper.executeTransaction(session1 -> {
-            session1.remove(accountToClose);
+            var newAmount = accountToTransferMoney.getMoneyAmount() + accountToClose.getMoneyAmount();
+            accountToTransferMoney.setMoneyAmount(newAmount);
+            session.remove(accountToClose);
             return Optional.of(accountToClose);
         });
+
     }
 
     public void transfer(int fromAccountId, int toAccountId, int amount) {
