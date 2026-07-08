@@ -4,6 +4,8 @@ import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
+import sorokin.java.course.account.Account;
+import sorokin.java.course.account.AccountProperties;
 import sorokin.java.course.account.AccountService;
 import sorokin.java.course.config.TransactionHelper;
 import sorokin.java.course.user.User;
@@ -15,18 +17,23 @@ public class UserService {
     private final SessionFactory sessionFactory;
     private final AccountService accountService;
     private final TransactionHelper transactionHelper;
+    private final AccountProperties accountProperties;
 
-    public UserService(SessionFactory sessionFactory, AccountService accountService, TransactionHelper transactionHelper) {
+    public UserService(SessionFactory sessionFactory, AccountService accountService, TransactionHelper transactionHelper, AccountProperties accountProperties) {
         this.sessionFactory = sessionFactory;
         this.accountService = accountService;
         this.transactionHelper = transactionHelper;
+        this.accountProperties = accountProperties;
     }
 
     public User createUser(String login) {
         String normalizedLogin = validateLogin(login);
         return transactionHelper.executeTransaction(session -> {
             User user = new User(normalizedLogin);
+            Account account = new Account(user, accountProperties.getDefaultAmount());
+            session.persist(account);
             session.persist(user);
+            user.getAccountList().add(account);
             return user;
         });
     }

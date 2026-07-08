@@ -33,7 +33,7 @@ public class ApplicationConfiguration {
                 .setProperty("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect")
                 .setProperty("hibernate.show-sql", "true")
                 .setProperty("hibernate.format_sql", "true")
-                .setProperty("hibernate.hbm2ddl.auto", "create-drop");
+                .setProperty("hibernate.hbm2ddl.auto", "update");
 
         return configuration.buildSessionFactory();
     }

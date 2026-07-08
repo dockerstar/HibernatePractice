@@ -25,11 +25,12 @@ public class TransactionHelper {
             action.accept(session);
 
             transaction.commit();
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             if (transaction!=null) {
                 transaction.rollback();
             }
-            throw e;
         }
     }
 
@@ -43,6 +44,8 @@ public class TransactionHelper {
 
             transaction.commit();
             return result;
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             if (transaction!=null) {
                 transaction.rollback();
