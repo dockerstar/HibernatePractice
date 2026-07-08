@@ -16,7 +16,7 @@ public class User {
     @Column(name = "user_login", nullable = false)
     private String login;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.ALL)
     private List<Account> accountList = new ArrayList<>();
 
     public User() {
@@ -62,7 +62,7 @@ public class User {
         return "User{" +
                 "id=" + id +
                 ", login='" + login + '\'' +
-                ", accountListId=" +
+                ", accountList=" +
                 accountList.stream()
                     .map(account -> "id: " + account.getId() +
                             " user_id: " + account.getUser().getId() +

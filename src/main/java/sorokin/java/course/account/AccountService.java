@@ -56,23 +56,27 @@ public class AccountService {
     public void withdraw(Integer fromAccountId, Integer amount) {
         validatePositiveId(fromAccountId, "account id");
         validatePositiveAmount(amount);
-        Account account = findAccountById(fromAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("No such account: id=%s".formatted(fromAccountId)));
+
         transactionHelper.executeTransaction(session -> {
-            session.merge(account);
+            Account account = session.find(Account.class, fromAccountId);
+            if (account==null) {
+                 throw new IllegalArgumentException("No such account: id=%s".formatted(fromAccountId));
+            }
             if (amount > account.getMoneyAmount()) {
                 throw new IllegalArgumentException(
                         "insufficient funds on account id=%s, moneyAmount=%s, attempted withdraw=%s"
                                 .formatted(account.getId(), account.getMoneyAmount(), amount)
                 );
             }
-            User user = session.find(User.class, account.getUser().getId());
+//            User user = session.find(User.class, account.getUser().getId());
             account.setMoneyAmount(account.getMoneyAmount() - amount);
-            List<Account> accountList = user.getAccountList();
-            accountList = accountList.stream().filter(account1 -> account1.getId() != account.getId()).collect(Collectors.toList());
-            accountList.add(account);
-            user.setAccountList(accountList);
-            user.getAccountList().forEach(System.out::println);
+//            List<Account> accountList = user.getAccountList();
+//            accountList = accountList.stream()
+//                    .filter(acc -> acc.getId() != account.getId())
+//                    .collect(Collectors.toList());
+//            accountList.add(account);
+//            user.setAccountList(accountList);
+//            user.getAccountList().forEach(System.out::println);
         });
     }
 
