@@ -2,17 +2,12 @@ package sorokin.java.course.account;
 
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import sorokin.java.course.config.TransactionHelper;
 import sorokin.java.course.user.User;
-import sorokin.java.course.user.UserService;
-
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 @Service
 public class AccountService {
@@ -112,7 +107,7 @@ public class AccountService {
         validatePositiveId(fromAccountId, "source account id");
         validatePositiveId(toAccountId, "target account id");
         validatePositiveAmount(amount);
-        transactionHelper.executeTransaction(session -> {
+        transactionHelper.executeTransaction((Consumer<Session>) session -> {
             if (fromAccountId == toAccountId) {
                 throw new IllegalArgumentException("source and target account id must be different");
             }
@@ -136,6 +131,8 @@ public class AccountService {
                     ? amount
                     : (int) Math.round(amount * (1 - accountProperties.getTransferCommission()));
             accountTo.setMoneyAmount(accountTo.getMoneyAmount() + amountToTransfer);
+
+//            throw new IllegalArgumentException("Перевод должен откатиться");
         });
     }
 

@@ -2,13 +2,11 @@ package sorokin.java.course.user;
 
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import sorokin.java.course.account.Account;
 import sorokin.java.course.account.AccountProperties;
 import sorokin.java.course.account.AccountService;
 import sorokin.java.course.config.TransactionHelper;
-import sorokin.java.course.user.User;
 
 import java.util.*;
 
