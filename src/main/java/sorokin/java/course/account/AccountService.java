@@ -131,8 +131,6 @@ public class AccountService {
                     ? amount
                     : (int) Math.round(amount * (1 - accountProperties.getTransferCommission()));
             accountTo.setMoneyAmount(accountTo.getMoneyAmount() + amountToTransfer);
-
-//            throw new IllegalArgumentException("Перевод должен откатиться");
         });
     }
 
